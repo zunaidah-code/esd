@@ -26,3 +26,29 @@ python3 render.py        # build/esd_video.mp4 + .srt
 python3 render.py --sheet sheet.png   # contact sheet preview
 ```
 (`cutout.py` re-extracts the character cut-outs; needs `isnet-general-use.onnx` from the rembg releases.)
+
+---
+
+# Selepas Pinggan Ditinggalkan (animated video)
+
+**Output:** `output/Selepas_Pinggan_Ditinggalkan_16x9.mp4` (16:9, 1280×720, 25 fps, 5 min 54 s, captions burned in)
+plus `output/Selepas_Pinggan_Ditinggalkan.srt`.
+
+Follows the 12-scene brief in `assets/pinggan/prompt_claude_esd.docx`: title → 12 scenes (8 ESD competencies
+tracked at the top right, lecturer/CQI segment in scene 11) → final reflection question → credits.
+
+| Item | How it is made |
+|---|---|
+| Visuals | The approved storyboard panels (`assets/pinggan/storyboard.webp`) with Ken Burns camera moves, plus animated infographics drawn in code (system map, imagined-scenario triptych labelled "Senario bayangan", criteria board, pilot responsibility sheet, CQI loop) |
+| Characters | Face badges cut from `assets/pinggan/characters.webp`; the active speaker's badge pulses with their voice |
+| Voices | Offline TTS espeak-ng + MBROLA, a separate pitch/speed per character (Amir, Ju, Sara, Kak Lina, narrator) |
+| Music / SFX | Original cheerful track synthesised by `tools/music.py`, synthesised cafeteria ambience — royalty-free |
+
+No statistics, baselines or official mappings are invented; the credits say that the examples are illustrative.
+
+```bash
+cd tools
+python3 pinggan_voices.py          # build/pg/audio/*.wav
+python3 pinggan.py                 # build/pg/pinggan.mp4 + .srt
+python3 pinggan.py --sheet s.png   # contact-sheet preview
+```

@@ -44,6 +44,10 @@ tracked at the top right, lecturer/CQI segment in scene 11) → final reflection
 | Voices | Offline TTS espeak-ng + MBROLA, a separate pitch/speed per character (Amir, Ju, Sara, Kak Lina, narrator) |
 | Music / SFX | Original cheerful track synthesised by `tools/music.py`, synthesised cafeteria ambience — royalty-free |
 
+**Text-only version (no dialogue):** `output/Selepas_Pinggan_Ditinggalkan_TanpaSuara_16x9.mp4` (5 min 56 s) —
+same visuals, lines shown as on-screen text held long enough to read, music + light ambience only.
+Build with `PG_NOVO=1 python3 pinggan.py` (→ `build/pg/pinggan_novo.mp4`).
+
 No statistics, baselines or official mappings are invented; the credits say that the examples are illustrative.
 
 ```bash

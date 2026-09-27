@@ -22,6 +22,13 @@ BUILD = "/home/user/esd/build/pg"
 AUD = BUILD + "/audio"
 SR = 44100
 META = json.load(open(AUD + "/meta.json"))
+# PG_NOVO=1: text-only version (no dialogue audio). Lines stay on screen long enough to read;
+# spoken-only items (title, competency names, final question) are already shown as on-screen text.
+NOVO = os.environ.get("PG_NOVO") == "1"
+HIDE = {"t00", "s12q"} | {k for k in META if k.endswith("n")}
+if NOVO:
+    for k, m in META.items(): m["dur"] = max(m["dur"], 1.2 + len(m["caption"]) / 14)
+SUF = "_novo" if os.environ.get("PG_NOVO") == "1" else ""
 XF = 0.5          # crossfade between scenes (s)
 
 # photo frame & right-hand panel
@@ -574,7 +581,7 @@ def sc_credits(fr, t, d, L):
     place(fr, im, W / 2, 200, alpha=fade(t, 0.2))
     rows = ["Video pendidikan ESD untuk pelajar pengajian tinggi Malaysia",
             "Visual: papan cerita & helaian watak yang diluluskan · Animasi grafik: dijana dengan kod",
-            "Suara: TTS luar talian (espeak-ng + MBROLA)",
+            ("Versi teks sahaja — tanpa suara" if NOVO else "Suara: TTS luar talian (espeak-ng + MBROLA)"),
             "Muzik & kesan bunyi: gubahan asal, disintesis — bebas hak cipta",
             "Contoh dalam video adalah ilustrasi; tiada statistik atau pemetaan rasmi dicipta."]
     for i, r_ in enumerate(rows):
@@ -630,6 +637,7 @@ def envelope(key):
 def subtitles(fr, sc, t):
     if not sc["sub"]: return
     for key, (a, b) in sc["L"].items():
+        if NOVO and key in HIDE: continue
         if a - 0.15 <= t <= b + 0.5:
             m = META[key]; spk = m["speaker"]
             al = fade(t, a - 0.15, 0.25) * (1 - fade(t, b + 0.25, 0.25))
@@ -641,14 +649,14 @@ def subtitles(fr, sc, t):
             if spk != "nar": x0 = 96
             bar2 = Image.new("RGBA", (bw, bh + 24), (0, 0, 0, 0)); bar2.alpha_composite(bar, (0, 24))
             o = ImageDraw.Draw(bar2)
-            o.rounded_rectangle((x0 - 10, 8, x0 + tsize(m["name"].upper() if spk != "nar" else "NARATOR", fn)[0] + 12, 34), 10,
+            if not (NOVO and spk == "nar"): o.rounded_rectangle((x0 - 10, 8, x0 + tsize(m["name"].upper() if spk != "nar" else "NARATOR", fn)[0] + 12, 34), 10,
                                 fill=COL[spk])
-            o.text((x0, 9), m["name"].upper() if spk != "nar" else "NARATOR", font=fn, fill="white")
+            if not (NOVO and spk == "nar"): o.text((x0, 9), m["name"].upper() if spk != "nar" else "NARATOR", font=fn, fill="white")
             for i, ln in enumerate(lines):
                 o.text((x0, 38 + i * 34), ln, font=f, fill=(255, 250, 240))
             place(fr, bar2, W / 2, H - 14, alpha=al, anchor=(0.5, 1))
             if spk != "nar":
-                e = envelope(key); i = int((t - a) * FPS)
+                e = envelope(key) if not NOVO else np.zeros(1); i = int((t - a) * FPS)
                 v = float(e[i]) if 0 <= i < len(e) else 0.0
                 place(fr, face(spk, 64), 48 + 12 + 34, H - 14 - (bh + 24) + 34 + 2 - v * 4, alpha=al, scale=1 + 0.04 * v)
 
@@ -714,8 +722,10 @@ def build_audio(path):
         a0, a1 = int(STARTS[i] * SR), int((STARTS[i] + sc["d"]) * SR)
         amb_env[a0:a1] = sc["amb"]
         for key, (s, e) in sc["L"].items():
-            x = load_vo(key); a = int((STARTS[i] + s) * SR)
-            vo[a:a + len(x)] += x[:n - a]
+            if not NOVO:
+                x = load_vo(key); a = int((STARTS[i] + s) * SR)
+                vo[a:a + len(x)] += x[:n - a]
+            if NOVO and key in HIDE: continue
             if sc["sub"] or key == "s12q": subs.append((STARTS[i] + s, STARTS[i] + e, META[key]["caption"]))
     k = int(SR * 1.0); amb_env = np.convolve(amb_env, np.ones(k) / k, "same")
     amb = ambience(n) * amb_env
@@ -726,6 +736,7 @@ def build_audio(path):
     act = (np.abs(vo) > 0.02).astype(np.float32)
     k = int(SR * 0.3); act = np.convolve(act, np.ones(k) / k, "same")
     duck = 1 - 0.7 * np.clip(act * 3, 0, 1)
+    if NOVO: duck = np.full(n, 0.75 / 0.42, np.float32)
     mix = mus * (0.42 * duck)[:, None] + (vo * 0.95)[:, None] + (amb * 0.22)[:, None]
     mix /= max(1.0, np.abs(mix).max() / 0.97)
     wavfile.write(path, SR, mix.astype(np.float32))
@@ -744,10 +755,10 @@ def main():
     import imageio_ffmpeg
     ff = imageio_ffmpeg.get_ffmpeg_exe()
     wav = f"{BUILD}/mix.wav"
-    subs = build_audio(wav); srt(subs, f"{BUILD}/pinggan.srt")
+    subs = build_audio(wav); srt(subs, f"{BUILD}/pinggan{SUF}.srt")
     nf = int(TOTAL * FPS)
     print(f"total {TOTAL:.1f}s, {nf} frames", flush=True)
-    out = f"{BUILD}/pinggan.mp4"
+    out = f"{BUILD}/pinggan{SUF}.mp4"
     p = subprocess.Popen([ff, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}",
                           "-r", str(FPS), "-i", "-", "-i", wav, "-c:v", "libx264", "-preset", "medium", "-crf", "20",
                           "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", out],
